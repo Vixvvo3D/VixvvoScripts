@@ -402,10 +402,21 @@ function CollectTab.init(frame)
     header.TextSize = 16
     header.TextXAlignment = Enum.TextXAlignment.Left
     
+    -- Note: Users need to collect each individual crypto machine to enable auto-collection
+    local note = Instance.new("TextLabel", frame)
+    note.Size = UDim2.new(1, -20, 0, 20)
+    note.Position = UDim2.new(0, 10, 0, 40)
+    note.BackgroundTransparency = 1
+    note.Text = "Note: Collect each individual crypto machine to enable auto-collection."
+    note.TextColor3 = Color3.fromRGB(200, 200, 200)
+    note.Font = Enum.Font.Gotham
+    note.TextSize = 14
+    note.TextXAlignment = Enum.TextXAlignment.Left
+    
     -- Create scrolling frame for collect items
     local collectScroll = Instance.new("ScrollingFrame", frame)
     collectScroll.Size = UDim2.new(1, -20, 1, -60)
-    collectScroll.Position = UDim2.new(0, 10, 0, 50)
+    collectScroll.Position = UDim2.new(0, 10, 0, 70) -- Adjusted position
     collectScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     collectScroll.ScrollBarThickness = 4
     collectScroll.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
