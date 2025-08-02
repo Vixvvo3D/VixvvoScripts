@@ -1,7 +1,7 @@
 -- Standalone Auto Crypto Farm GUI
 -- This is a complete script that includes all modules in a single file
 -- Modern Draggable Tabbed UI: Auto Collect + Auto Sell + Auto Buy + Settings + Minimize + Close
--- Fully functional, draggable UI with Save/Load config and persistent states
+-- Fully functional, draggable UI with Save & Load config and persistent states
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
