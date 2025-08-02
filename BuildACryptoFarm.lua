@@ -1,439 +1,994 @@
--- LuArmor Key System UI with API Integration
+-- Standalone Auto Crypto Farm GUI
+-- This is a complete script that includes all modules in a single file
+-- Modern Draggable Tabbed UI: Auto Collect + Auto Sell + Auto Buy + Settings + Minimize + Close
+-- Fully functional, draggable UI with Save/Load config and persistent states
+
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
-
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local remotes = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Events")
 
--- LuArmor Configuration
-local SCRIPT_ID = "ff94fa97eae530cd18a209e57d352d3e"
-local KEY_LINK = "https://ads.luarmor.net/get_key?for=Build_A_Crypto_Farm-DlxkrNFibHnl"
-local SCRIPT_URL = "https://api.luarmor.net/files/v3/loaders/" .. SCRIPT_ID .. ".lua"
--- Removed VALIDATION_URL as we're using GET with parameters
+-- ========================
+-- CONFIG MODULE
+-- ========================
+local Config = {}
 
--- Create ScreenGui
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "LuArmorKeySystem"
-screenGui.Parent = playerGui
-screenGui.ResetOnSpawn = false
+-- Config file
+Config.CONFIG_FILE = "AutoCryptoConfig.json"
+Config.canFile = writefile and isfile and readfile
 
--- Main Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 420, 0, 320)
-mainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = screenGui
+-- State tables
+Config.autoCollect = {}   -- [uuid] = bool
+Config.autoSell = false   -- bool
+Config.autoBuy = {}       -- [machineName] = bool
 
--- Add corner radius
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 15)
-corner.Parent = mainFrame
+-- For UI tracking
+Config.collectUI = {}     -- [uuid] = true
 
--- Add stroke
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(60, 60, 80)
-stroke.Thickness = 1
-stroke.Parent = mainFrame
+-- Machine names
+Config.machineNames = {
+    "Retro Crypto Miner", "Classic Crypto Miner", "CryptoByte", "Crypto Desktop",
+    "Crypto Master", "Crypto Farm Mini", "Plasma Maker", "Gamer Mini",
+    "Crypto Vault", "Graphics Miner", "Crypto Generator", "Super Generator",
+    "Mega Miner", "Quantum Miner", "Crypto Tower", "Omega Miner"
+}
 
--- Header Frame
-local headerFrame = Instance.new("Frame")
-headerFrame.Name = "HeaderFrame"
-headerFrame.Size = UDim2.new(1, 0, 0, 70)
-headerFrame.Position = UDim2.new(0, 0, 0, 0)
-headerFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-headerFrame.BorderSizePixel = 0
-headerFrame.Parent = mainFrame
-
-local headerCorner = Instance.new("UICorner")
-headerCorner.CornerRadius = UDim.new(0, 15)
-headerCorner.Parent = headerFrame
-
--- Fix header bottom corners
-local headerFix = Instance.new("Frame")
-headerFix.Size = UDim2.new(1, 0, 0, 15)
-headerFix.Position = UDim2.new(0, 0, 1, -15)
-headerFix.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
-headerFix.BorderSizePixel = 0
-headerFix.Parent = headerFrame
-
--- Title
-local title = Instance.new("TextLabel")
-title.Name = "Title"
-title.Size = UDim2.new(1, -100, 1, 0)
-title.Position = UDim2.new(0, 20, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = "🛡️ Key System"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 18
-title.Font = Enum.Font.GothamBold
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = headerFrame
-
--- Close Button
-local closeButton = Instance.new("TextButton")
-closeButton.Name = "CloseButton"
-closeButton.Size = UDim2.new(0, 35, 0, 35)
-closeButton.Position = UDim2.new(1, -50, 0, 17.5)
-closeButton.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-closeButton.BorderSizePixel = 0
-closeButton.Text = "✕"
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.TextSize = 16
-closeButton.Font = Enum.Font.GothamBold
-closeButton.Parent = headerFrame
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 8)
-closeCorner.Parent = closeButton
-
--- Status Label
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Name = "StatusLabel"
-statusLabel.Size = UDim2.new(1, -40, 0, 25)
-statusLabel.Position = UDim2.new(0, 20, 0, 90)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Enter your key below or click 'Get Key' to obtain one"
-statusLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
-statusLabel.TextSize = 14
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextXAlignment = Enum.TextXAlignment.Center
-statusLabel.Parent = mainFrame
-
--- Key Input Frame
-local inputFrame = Instance.new("Frame")
-inputFrame.Name = "InputFrame"
-inputFrame.Size = UDim2.new(1, -40, 0, 45)
-inputFrame.Position = UDim2.new(0, 20, 0, 125)
-inputFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-inputFrame.BorderSizePixel = 0
-inputFrame.Parent = mainFrame
-
-local inputCorner = Instance.new("UICorner")
-inputCorner.CornerRadius = UDim.new(0, 10)
-inputCorner.Parent = inputFrame
-
-local inputStroke = Instance.new("UIStroke")
-inputStroke.Color = Color3.fromRGB(70, 70, 90)
-inputStroke.Thickness = 1
-inputStroke.Parent = inputFrame
-
--- Key Input
-local keyInput = Instance.new("TextBox")
-keyInput.Name = "KeyInput"
-keyInput.Size = UDim2.new(1, -20, 1, -10)
-keyInput.Position = UDim2.new(0, 10, 0, 5)
-keyInput.BackgroundTransparency = 1
-keyInput.PlaceholderText = "Enter your key here..."
-keyInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
-keyInput.Text = ""
-keyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-keyInput.TextSize = 14
-keyInput.Font = Enum.Font.Gotham
-keyInput.TextXAlignment = Enum.TextXAlignment.Center
-keyInput.ClearTextOnFocus = false
-keyInput.Parent = inputFrame
-
--- Buttons Frame
-local buttonsFrame = Instance.new("Frame")
-buttonsFrame.Name = "ButtonsFrame"
-buttonsFrame.Size = UDim2.new(1, -40, 0, 50)
-buttonsFrame.Position = UDim2.new(0, 20, 0, 190)
-buttonsFrame.BackgroundTransparency = 1
-buttonsFrame.Parent = mainFrame
-
--- Get Key Button
-local getKeyButton = Instance.new("TextButton")
-getKeyButton.Name = "GetKeyButton"
-getKeyButton.Size = UDim2.new(0.48, 0, 1, 0)
-getKeyButton.Position = UDim2.new(0, 0, 0, 0)
-getKeyButton.BackgroundColor3 = Color3.fromRGB(70, 130, 220)
-getKeyButton.BorderSizePixel = 0
-getKeyButton.Text = "🔑 Get Key"
-getKeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-getKeyButton.TextSize = 14
-getKeyButton.Font = Enum.Font.GothamBold
-getKeyButton.Parent = buttonsFrame
-
-local getKeyCorner = Instance.new("UICorner")
-getKeyCorner.CornerRadius = UDim.new(0, 10)
-getKeyCorner.Parent = getKeyButton
-
--- Redeem Key Button
-local redeemButton = Instance.new("TextButton")
-redeemButton.Name = "RedeemButton"
-redeemButton.Size = UDim2.new(0.48, 0, 1, 0)
-redeemButton.Position = UDim2.new(0.52, 0, 0, 0)
-redeemButton.BackgroundColor3 = Color3.fromRGB(70, 180, 70)
-redeemButton.BorderSizePixel = 0
-redeemButton.Text = "✓ Redeem Key"
-redeemButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-redeemButton.TextSize = 14
-redeemButton.Font = Enum.Font.GothamBold
-redeemButton.Parent = buttonsFrame
-
-local redeemCorner = Instance.new("UICorner")
-redeemCorner.CornerRadius = UDim.new(0, 10)
-redeemCorner.Parent = redeemButton
-
--- Progress Bar Frame
-local progressFrame = Instance.new("Frame")
-progressFrame.Name = "ProgressFrame"
-progressFrame.Size = UDim2.new(1, -40, 0, 8)
-progressFrame.Position = UDim2.new(0, 20, 0, 260)
-progressFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-progressFrame.BorderSizePixel = 0
-progressFrame.Visible = false
-progressFrame.Parent = mainFrame
-
-local progressCorner = Instance.new("UICorner")
-progressCorner.CornerRadius = UDim.new(0, 4)
-progressCorner.Parent = progressFrame
-
-local progressBar = Instance.new("Frame")
-progressBar.Name = "ProgressBar"
-progressBar.Size = UDim2.new(0, 0, 1, 0)
-progressBar.Position = UDim2.new(0, 0, 0, 0)
-progressBar.BackgroundColor3 = Color3.fromRGB(70, 180, 70)
-progressBar.BorderSizePixel = 0
-progressBar.Parent = progressFrame
-
-local progressBarCorner = Instance.new("UICorner")
-progressBarCorner.CornerRadius = UDim.new(0, 4)
-progressBarCorner.Parent = progressBar
-
--- Footer
-local footer = Instance.new("TextLabel")
-footer.Name = "Footer"
-footer.Size = UDim2.new(1, -40, 0, 20)
-footer.Position = UDim2.new(0, 20, 1, -35)
-footer.BackgroundTransparency = 1
-footer.Text = "Powered by Vixvvo"
-footer.TextColor3 = Color3.fromRGB(100, 100, 110)
-footer.TextSize = 12
-footer.Font = Enum.Font.Gotham
-footer.TextXAlignment = Enum.TextXAlignment.Center
-footer.Parent = mainFrame
-
--- Utility Functions
-local function updateStatus(text, color)
-    statusLabel.Text = text
-    statusLabel.TextColor3 = color or Color3.fromRGB(180, 180, 190)
+-- Initialize auto buy settings
+for _, name in ipairs(Config.machineNames) do 
+    Config.autoBuy[name] = false 
 end
 
-local function showProgress()
-    progressFrame.Visible = true
-    progressBar.Size = UDim2.new(0, 0, 1, 0)
-    
-    local tween = TweenService:Create(progressBar, TweenInfo.new(1.5, Enum.EasingStyle.Quad), {
-        Size = UDim2.new(1, 0, 1, 0)
-    })
-    tween:Play()
-end
-
-local function hideProgress()
-    progressFrame.Visible = false
-end
-
-local function animateButton(button, hover)
-    local scale = hover and 1.05 or 1
-    local transparency = hover and 0.8 or 1
-    
-    -- Store original size if not already stored
-    if not button:GetAttribute("OriginalSizeX") then
-        button:SetAttribute("OriginalSizeX", button.Size.X.Scale)
-        button:SetAttribute("OriginalSizeY", button.Size.Y.Scale)
-        button:SetAttribute("OriginalOffsetX", button.Size.X.Offset)
-        button:SetAttribute("OriginalOffsetY", button.Size.Y.Offset)
+-- Save/Load config functions
+function Config.save()
+    if not Config.canFile then return end
+    local data = {
+        collect = Config.autoCollect, 
+        sell = Config.autoSell, 
+        buy = Config.autoBuy
+    }
+    local ok, json = pcall(HttpService.JSONEncode, HttpService, data)
+    if ok then 
+        pcall(writefile, Config.CONFIG_FILE, json) 
     end
-    
-    local originalSizeX = button:GetAttribute("OriginalSizeX")
-    local originalSizeY = button:GetAttribute("OriginalSizeY")
-    local originalOffsetX = button:GetAttribute("OriginalOffsetX")
-    local originalOffsetY = button:GetAttribute("OriginalOffsetY")
-    
-    TweenService:Create(button, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-        Size = UDim2.new(originalSizeX * scale, originalOffsetX * scale, originalSizeY * scale, originalOffsetY * scale),
-        BackgroundTransparency = 1 - transparency
-    }):Play()
 end
 
--- LuArmor Key Validation Function
-local function validateKey(key)
-    -- For LuArmor scripts, the key validation is handled by the script itself
-    -- We just need to set the key in the environment and try to load the script
-    local success, result = pcall(function()
-        -- Set the key in the global environment for LuArmor to read
-        getgenv().script_key = key
-        _G.script_key = key
-        
-        -- Try to load the script
-        local scriptContent = game:HttpGet(SCRIPT_URL)
-        local scriptFunc = loadstring(scriptContent)
-        if scriptFunc then
-            -- Execute the script in a separate thread so UI can close
-            spawn(function()
-                scriptFunc()
-            end)
-            return true
-        else
-            return false
-        end
+function Config.load()
+    if not Config.canFile or not isfile(Config.CONFIG_FILE) then return end
+    local ok, raw = pcall(readfile, Config.CONFIG_FILE)
+    if not ok then return end
+    local success, data = pcall(HttpService.JSONDecode, HttpService, raw)
+    if not success or type(data) ~= "table" then return end
+    
+    Config.autoCollect = data.collect or {}
+    Config.autoSell = data.sell or false
+    for k, v in pairs(data.buy or {}) do 
+        Config.autoBuy[k] = v 
+    end
+end
+
+-- Initialize config
+Config.load()
+
+-- ========================
+-- UI MANAGER MODULE
+-- ========================
+local UIManager = {}
+
+-- UI variables
+UIManager.gui = nil
+UIManager.main = nil
+UIManager.shadow = nil
+UIManager.tabButtons = {}
+UIManager.frames = {}
+UIManager.currentTab = "Collect"
+UIManager.minimized = false
+UIManager.originalSize = nil
+
+function UIManager.init()
+    -- Create main GUI
+    UIManager.gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+    UIManager.gui.Name = "AutoCryptoGUI"
+    UIManager.gui.ResetOnSpawn = false
+
+    -- Main container with modern styling
+    UIManager.main = Instance.new("Frame", UIManager.gui)
+    UIManager.main.Size = UDim2.new(0, 480, 0, 600)
+    UIManager.main.Position = UDim2.new(0.5, -240, 0.5, -300)
+    UIManager.main.BackgroundColor3 = Color3.fromRGB(47, 49, 54)  -- Discord-like dark color
+    UIManager.main.Active = true
+    UIManager.main.Draggable = false  -- We'll handle dragging manually
+    UIManager.main.BorderSizePixel = 0
+    
+    -- Modern rounded corners
+    local corner = Instance.new("UICorner", UIManager.main)
+    corner.CornerRadius = UDim.new(0, 8)
+    
+    -- Subtle drop shadow effect (child of main so it moves together)
+    local shadow = Instance.new("Frame", UIManager.main)
+    shadow.Size = UDim2.new(1, 8, 1, 8)
+    shadow.Position = UDim2.new(0, -4, 0, -4)
+    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.BackgroundTransparency = 0.7
+    shadow.ZIndex = UIManager.main.ZIndex - 1
+    shadow.BorderSizePixel = 0
+    local shadowCorner = Instance.new("UICorner", shadow)
+    shadowCorner.CornerRadius = UDim.new(0, 12)
+    
+    UIManager.shadow = shadow  -- Store reference for minimize function
+    
+    -- Title bar
+    local titleBar = Instance.new("Frame", UIManager.main)
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+    titleBar.BorderSizePixel = 0
+    titleBar.Active = true  -- Make title bar active for dragging
+    local titleCorner = Instance.new("UICorner", titleBar)
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    
+    -- Title text
+    local title = Instance.new("TextLabel", titleBar)
+    title.Size = UDim2.new(1, -80, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "🚀 Auto Crypto Farm"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Add draggable cursor hint
+    titleBar.MouseEnter:Connect(function()
+        titleBar.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+    end)
+    titleBar.MouseLeave:Connect(function()
+        titleBar.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
     end)
     
-    if success and result then
-        return true, "Key validated successfully"
-    else
-        -- Clear the invalid key silently
-        pcall(function()
-            if getgenv then getgenv().script_key = nil end
-            _G.script_key = nil
+    UIManager.originalSize = UIManager.main.Size
+    UIManager.titleBar = titleBar
+    
+    -- Set up dragging functionality
+    UIManager.setupDragging(titleBar)
+    
+    UIManager.createControlButtons()
+    UIManager.createTabs()
+end
+
+-- Dragging functionality
+function UIManager.setupDragging(dragFrame)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    dragFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = UIManager.main.Position
+
+            local connection
+            connection = UserInputService.InputChanged:Connect(function(input2)
+                if input2.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+                    local delta = input2.Position - dragStart
+                    UIManager.main.Position = UDim2.new(
+                        startPos.X.Scale,
+                        startPos.X.Offset + delta.X,
+                        startPos.Y.Scale,
+                        startPos.Y.Offset + delta.Y
+                    )
+                end
+            end)
+
+            -- Clean up when dragging stops
+            local releaseConnection
+            releaseConnection = UserInputService.InputEnded:Connect(function(input2)
+                if input2.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = false
+                    connection:Disconnect()
+                    releaseConnection:Disconnect()
+                end
+            end)
+        end
+    end)
+end
+
+function UIManager.createControlButtons()
+    -- Minimize button with modern styling
+    local minimize = Instance.new("TextButton", UIManager.titleBar)
+    minimize.Size = UDim2.new(0, 25, 0, 25)
+    minimize.Position = UDim2.new(1, -65, 0, 7.5)
+    minimize.Text = "─"
+    minimize.Font = Enum.Font.GothamBold
+    minimize.TextScaled = true
+    minimize.BackgroundColor3 = Color3.fromRGB(88, 101, 242)  -- Discord blue
+    minimize.TextColor3 = Color3.fromRGB(255, 255, 255)
+    minimize.BorderSizePixel = 0
+    
+    local minimizeCorner = Instance.new("UICorner", minimize)
+    minimizeCorner.CornerRadius = UDim.new(0, 4)
+    
+    -- Hover effect for minimize
+    minimize.MouseEnter:Connect(function()
+        minimize.BackgroundColor3 = Color3.fromRGB(114, 118, 125)
+    end)
+    minimize.MouseLeave:Connect(function()
+        minimize.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    end)
+
+    -- Close button with modern styling
+    local close = Instance.new("TextButton", UIManager.titleBar)
+    close.Size = UDim2.new(0, 25, 0, 25)
+    close.Position = UDim2.new(1, -35, 0, 7.5)
+    close.Text = "✕"
+    close.Font = Enum.Font.GothamBold
+    close.TextScaled = true
+    close.BackgroundColor3 = Color3.fromRGB(237, 66, 69)  -- Discord red
+    close.TextColor3 = Color3.fromRGB(255, 255, 255)
+    close.BorderSizePixel = 0
+    
+    local closeCorner = Instance.new("UICorner", close)
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    
+    -- Hover effect for close
+    close.MouseEnter:Connect(function()
+        close.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+    end)
+    close.MouseLeave:Connect(function()
+        close.BackgroundColor3 = Color3.fromRGB(237, 66, 69)
+    end)
+
+    -- Event connections
+    close.MouseButton1Click:Connect(function() 
+        UIManager.gui:Destroy() 
+    end)
+
+    minimize.MouseButton1Click:Connect(function()
+        UIManager.toggleMinimize()
+    end)
+end
+
+function UIManager.createTabs()
+    -- Tab container
+    local tabContainer = Instance.new("Frame", UIManager.main)
+    tabContainer.Size = UDim2.new(1, -20, 0, 50)
+    tabContainer.Position = UDim2.new(0, 10, 0, 50)
+    tabContainer.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
+    tabContainer.BorderSizePixel = 0
+    local tabContainerCorner = Instance.new("UICorner", tabContainer)
+    tabContainerCorner.CornerRadius = UDim.new(0, 6)
+    
+    local tabLayout = Instance.new("UIListLayout", tabContainer)
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    tabLayout.Padding = UDim.new(0, 5)
+    
+    for i, name in ipairs({"Collect", "Sell", "Buy", "Settings"}) do
+        -- Tab button with modern styling
+        local btn = Instance.new("TextButton", tabContainer)
+        btn.Size = UDim2.new(0, 100, 0, 35)
+        btn.Text = name
+        btn.Font = Enum.Font.GothamSemibold
+        btn.TextSize = 14
+        btn.TextColor3 = Color3.fromRGB(185, 187, 190)
+        btn.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+        btn.BorderSizePixel = 0
+        btn.AutoButtonColor = false
+        
+        -- Add icons to tabs
+        local icons = {Collect = "💰", Sell = "💸", Buy = "🛒", Settings = "⚙️"}
+        btn.Text = icons[name] .. " " .. name
+        
+        local btnCorner = Instance.new("UICorner", btn)
+        btnCorner.CornerRadius = UDim.new(0, 4)
+        
+        -- Active tab styling
+        if name == UIManager.currentTab then
+            btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+        
+        -- Hover effects
+        btn.MouseEnter:Connect(function()
+            if UIManager.currentTab ~= name then
+                btn.BackgroundColor3 = Color3.fromRGB(79, 84, 92)
+            end
+        end)
+        btn.MouseLeave:Connect(function()
+            if UIManager.currentTab ~= name then
+                btn.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+            end
         end)
         
-        -- Always return "Invalid code" for any validation failure
-        return false, "Invalid code"
+        UIManager.tabButtons[name] = btn
+
+        -- Tab frame with modern container
+        local fr = Instance.new("Frame", UIManager.main)
+        fr.Size = UDim2.new(1, -30, 1, -130)
+        fr.Position = UDim2.new(0, 15, 0, 115)
+        fr.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+        fr.BorderSizePixel = 0
+        fr.Visible = (name == UIManager.currentTab)
+        local frCorner = Instance.new("UICorner", fr)
+        frCorner.CornerRadius = UDim.new(0, 6)
+        
+        UIManager.frames[name] = fr
+
+        -- Button click event with visual feedback
+        btn.MouseButton1Click:Connect(function()
+            -- Update all tabs
+            for tabName, tabBtn in pairs(UIManager.tabButtons) do
+                if tabName == name then
+                    tabBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+                    tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                else
+                    tabBtn.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+                    tabBtn.TextColor3 = Color3.fromRGB(185, 187, 190)
+                end
+            end
+            UIManager.currentTab = name
+            UIManager.show(name)
+        end)
     end
 end
 
--- Button Events
-getKeyButton.MouseButton1Click:Connect(function()
-    updateStatus("Opening key link...", Color3.fromRGB(70, 130, 220))
-    
-    -- Copy to clipboard if available
-    if setclipboard then
-        setclipboard(KEY_LINK)
-        updateStatus("Key link copied to clipboard!", Color3.fromRGB(70, 180, 70))
+function UIManager.show(tab)
+    for name, fr in pairs(UIManager.frames) do 
+        fr.Visible = (name == tab) 
     end
-    
-    -- Try to open browser
-    pcall(function()
-        game:GetService("GuiService"):OpenBrowserWindow(KEY_LINK)
-    end)
-    
-    wait(2)
-    updateStatus("Complete the steps and return with your key", Color3.fromRGB(180, 180, 190))
-end)
+end
 
-redeemButton.MouseButton1Click:Connect(function()
-    local key = keyInput.Text:gsub("%s+", "")
+function UIManager.toggleMinimize()
+    if UIManager.minimized then
+        -- Restore to full size
+        UIManager.main.Size = UIManager.originalSize
+
+        -- Update shadow size to match
+        if UIManager.shadow then
+            UIManager.shadow.Size = UDim2.new(1, 8, 1, 8)
+        end
+
+        -- Show all UI elements
+        for _, frame in pairs(UIManager.frames) do
+            frame.Visible = false  -- Hide all first
+        end
+        UIManager.show(UIManager.currentTab)  -- Show the last active tab
+
+        -- Show tab container and other elements
+        for _, child in pairs(UIManager.main:GetChildren()) do
+            if child.Name ~= "UICorner" and child ~= UIManager.titleBar and child ~= UIManager.shadow then
+                child.Visible = true
+            end
+        end
+
+        UIManager.minimized = false
+    else
+        -- Minimize to title bar only
+        UIManager.main.Size = UDim2.new(0, 480, 0, 40)
+
+        -- Update shadow size to match minimized state
+        if UIManager.shadow then
+            UIManager.shadow.Size = UDim2.new(1, 8, 1, 8)
+        end
+
+        -- Hide all content except title bar and shadow
+        for _, child in pairs(UIManager.main:GetChildren()) do
+            if child.Name ~= "UICorner" and child ~= UIManager.titleBar and child ~= UIManager.shadow then
+                child.Visible = false
+            end
+        end
+
+        UIManager.minimized = true
+    end
+end
+
+-- ========================
+-- COLLECT TAB MODULE
+-- ========================
+local CollectTab = {}
+
+function CollectTab.init(frame)
+    -- Header
+    local header = Instance.new("TextLabel", frame)
+    header.Size = UDim2.new(1, -20, 0, 30)
+    header.Position = UDim2.new(0, 10, 0, 10)
+    header.BackgroundTransparency = 1
+    header.Text = "💰 Auto Collection Manager"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 16
+    header.TextXAlignment = Enum.TextXAlignment.Left
     
-    if key == "" or #key < 10 then
-        updateStatus("❌ Please enter a valid key!", Color3.fromRGB(220, 60, 60))
-        return
+    -- Note: Users need to collect each individual crypto machine to enable auto-collection
+    local note = Instance.new("TextLabel", frame)
+    note.Size = UDim2.new(1, -20, 0, 20)
+    note.Position = UDim2.new(0, 10, 0, 40)
+    note.BackgroundTransparency = 1
+    note.Text = "Note: Collect each individual crypto machine to enable auto-collection."
+    note.TextColor3 = Color3.fromRGB(200, 200, 200)
+    note.Font = Enum.Font.Gotham
+    note.TextSize = 14
+    note.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Create scrolling frame for collect items
+    local collectScroll = Instance.new("ScrollingFrame", frame)
+    collectScroll.Size = UDim2.new(1, -20, 1, -60)
+    collectScroll.Position = UDim2.new(0, 10, 0, 70) -- Adjusted position
+    collectScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    collectScroll.ScrollBarThickness = 4
+    collectScroll.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
+    collectScroll.BorderSizePixel = 0
+    collectScroll.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+    
+    local scrollCorner = Instance.new("UICorner", collectScroll)
+    scrollCorner.CornerRadius = UDim.new(0, 4)
+    
+    local collectLayout = Instance.new("UIListLayout", collectScroll)
+    collectLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    collectLayout.Padding = UDim.new(0, 8)
+    
+    -- Add padding
+    local padding = Instance.new("UIPadding", collectScroll)
+    padding.PaddingTop = UDim.new(0, 10)
+    padding.PaddingBottom = UDim.new(0, 10)
+    padding.PaddingLeft = UDim.new(0, 10)
+    padding.PaddingRight = UDim.new(0, 10)
+    
+    CollectTab.collectScroll = collectScroll
+    CollectTab.collectLayout = collectLayout
+    
+    -- Populate pre-saved collects
+    for uuid, _ in pairs(Config.autoCollect) do 
+        CollectTab.addUUID(uuid) 
+    end
+end
+
+function CollectTab.addUUID(uuid)
+    if Config.collectUI[uuid] then return end
+    Config.collectUI[uuid] = true
+    
+    if Config.autoCollect[uuid] == nil then 
+        Config.autoCollect[uuid] = false 
     end
     
-    updateStatus("🔍 Validating key...", Color3.fromRGB(255, 165, 0))
-    showProgress()
+    local item = Instance.new("Frame", CollectTab.collectScroll)
+    item.Size = UDim2.new(1, -20, 0, 40)
+    item.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+    item.BorderSizePixel = 0
     
-    -- Validate key by trying to load the script
-    spawn(function()
-        local isValid, message = validateKey(key)
-        
-        hideProgress()
-        
-        if isValid then
-            updateStatus("✅ Key validated! Loading script...", Color3.fromRGB(70, 180, 70))
-            
-            -- Close UI immediately when script loads successfully
-            local closeTween = TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-                Size = UDim2.new(0, 0, 0, 0),
-                Position = UDim2.new(0.5, 0, 0.5, 0)
-            })
-            closeTween:Play()
-            
-            closeTween.Completed:Connect(function()
-                screenGui:Destroy()
-            end)
+    local itemCorner = Instance.new("UICorner", item)
+    itemCorner.CornerRadius = UDim.new(0, 4)
+    
+    -- UUID display with better formatting
+    local lbl = Instance.new("TextLabel", item)
+    lbl.Size = UDim2.new(0.65, 0, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.Text = "🔑 " .. string.sub(uuid, 1, 20) .. "..."
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3 = Color3.fromRGB(220, 221, 222)
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Modern toggle button
+    local chk = Instance.new("TextButton", item)
+    chk.Size = UDim2.new(0, 80, 0, 25)
+    chk.Position = UDim2.new(1, -90, 0.5, -12.5)
+    chk.Font = Enum.Font.GothamSemibold
+    chk.TextSize = 11
+    chk.BorderSizePixel = 0
+    chk.AutoButtonColor = false
+    
+    local chkCorner = Instance.new("UICorner", chk)
+    chkCorner.CornerRadius = UDim.new(0, 12)
+    
+    local function updateText() 
+        if Config.autoCollect[uuid] then
+            chk.Text = "✓ ON"
+            chk.BackgroundColor3 = Color3.fromRGB(67, 181, 129)  -- Green
+            chk.TextColor3 = Color3.fromRGB(255, 255, 255)
         else
-            updateStatus("❌ " .. message, Color3.fromRGB(220, 60, 60))
+            chk.Text = "OFF"
+            chk.BackgroundColor3 = Color3.fromRGB(114, 118, 125)  -- Gray
+            chk.TextColor3 = Color3.fromRGB(185, 187, 190)
+        end
+    end
+    updateText()
+    
+    -- Hover effects
+    chk.MouseEnter:Connect(function()
+        if Config.autoCollect[uuid] then
+            chk.BackgroundColor3 = Color3.fromRGB(85, 195, 143)
+        else
+            chk.BackgroundColor3 = Color3.fromRGB(130, 134, 141)
         end
     end)
-end)
-
-closeButton.MouseButton1Click:Connect(function()
-    local closeTween = TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-        Size = UDim2.new(0, 0, 0, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0)
-    })
-    closeTween:Play()
-    
-    closeTween.Completed:Connect(function()
-        screenGui:Destroy()
+    chk.MouseLeave:Connect(function()
+        updateText()
     end)
-end)
+    
+    chk.MouseButton1Click:Connect(function()
+        Config.autoCollect[uuid] = not Config.autoCollect[uuid]
+        updateText()
+    end)
+    
+    CollectTab.collectScroll.CanvasSize = UDim2.new(0, 0, 0, CollectTab.collectLayout.AbsoluteContentSize.Y + 20)
+end
 
--- Enter key support
-keyInput.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        redeemButton.MouseButton1Click:Fire()
+-- ========================
+-- SELL TAB MODULE
+-- ========================
+local SellTab = {}
+
+function SellTab.init(frame)
+    -- Header
+    local header = Instance.new("TextLabel", frame)
+    header.Size = UDim2.new(1, -20, 0, 30)
+    header.Position = UDim2.new(0, 10, 0, 10)
+    header.BackgroundTransparency = 1
+    header.Text = "💸 Auto Sell Manager"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 16
+    header.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Main sell button container
+    local container = Instance.new("Frame", frame)
+    container.Size = UDim2.new(1, -20, 0, 80)
+    container.Position = UDim2.new(0, 10, 0, 60)
+    container.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
+    container.BorderSizePixel = 0
+    local containerCorner = Instance.new("UICorner", container)
+    containerCorner.CornerRadius = UDim.new(0, 6)
+    
+    local sellBtn = Instance.new("TextButton", container)
+    sellBtn.Size = UDim2.new(1, -20, 0, 50)
+    sellBtn.Position = UDim2.new(0, 10, 0, 15)
+    sellBtn.Font = Enum.Font.GothamBold
+    sellBtn.TextSize = 16
+    sellBtn.BorderSizePixel = 0
+    sellBtn.AutoButtonColor = false
+    
+    local sellCorner = Instance.new("UICorner", sellBtn)
+    sellCorner.CornerRadius = UDim.new(0, 6)
+    
+    local function updateSellText() 
+        if Config.autoSell then
+            sellBtn.Text = "✓ Auto Sell Enabled"
+            sellBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            sellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            sellBtn.Text = "❌ Auto Sell Disabled"
+            sellBtn.BackgroundColor3 = Color3.fromRGB(114, 118, 125)
+            sellBtn.TextColor3 = Color3.fromRGB(185, 187, 190)
+        end
     end
-end)
-
--- Button hover effects
-for _, button in pairs({getKeyButton, redeemButton, closeButton}) do
-    button.MouseEnter:Connect(function()
-        animateButton(button, true)
+    updateSellText()
+    
+    -- Hover effects
+    sellBtn.MouseEnter:Connect(function()
+        if Config.autoSell then
+            sellBtn.BackgroundColor3 = Color3.fromRGB(85, 195, 143)
+        else
+            sellBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+            sellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end)
+    sellBtn.MouseLeave:Connect(function()
+        updateSellText()
     end)
     
-    button.MouseLeave:Connect(function()
-        animateButton(button, false)
+    sellBtn.MouseButton1Click:Connect(function()
+        Config.autoSell = not Config.autoSell
+        updateSellText()
     end)
 end
 
--- Input focus effects
-keyInput.Focused:Connect(function()
-    inputStroke.Color = Color3.fromRGB(70, 130, 220)
-    inputStroke.Thickness = 2
-end)
+-- ========================
+-- BUY TAB MODULE
+-- ========================
+local BuyTab = {}
 
-keyInput.FocusLost:Connect(function()
-    inputStroke.Color = Color3.fromRGB(70, 70, 90)
-    inputStroke.Thickness = 1
-end)
+function BuyTab.init(frame)
+    -- Header for Auto Buy Crypto
+    local headerCrypto = Instance.new("TextLabel", frame)
+    headerCrypto.Size = UDim2.new(1, -20, 0, 30)
+    headerCrypto.Position = UDim2.new(0, 10, 0, 10)
+    headerCrypto.BackgroundTransparency = 1
+    headerCrypto.Text = "🛒 Auto Purchase Crypto"
+    headerCrypto.TextColor3 = Color3.fromRGB(255, 255, 255)
+    headerCrypto.Font = Enum.Font.GothamBold
+    headerCrypto.TextSize = 16
+    headerCrypto.TextXAlignment = Enum.TextXAlignment.Left
 
--- Make draggable
-local dragging = false
-local dragStart, startPos
+    local buyScrollCrypto = Instance.new("ScrollingFrame", frame)
+    buyScrollCrypto.Size = UDim2.new(1, -20, 0.4, -60)
+    buyScrollCrypto.Position = UDim2.new(0, 10, 0, 50)
+    buyScrollCrypto.CanvasSize = UDim2.new(0, 0, 0, 0)
+    buyScrollCrypto.ScrollBarThickness = 4
+    buyScrollCrypto.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
+    buyScrollCrypto.BorderSizePixel = 0
+    buyScrollCrypto.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
 
-headerFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
+    local scrollCornerCrypto = Instance.new("UICorner", buyScrollCrypto)
+    scrollCornerCrypto.CornerRadius = UDim.new(0, 4)
+
+    local buyLayoutCrypto = Instance.new("UIListLayout", buyScrollCrypto)
+    buyLayoutCrypto.SortOrder = Enum.SortOrder.LayoutOrder
+    buyLayoutCrypto.Padding = UDim.new(0, 8)
+
+    -- Add padding
+    local paddingCrypto = Instance.new("UIPadding", buyScrollCrypto)
+    paddingCrypto.PaddingTop = UDim.new(0, 10)
+    paddingCrypto.PaddingBottom = UDim.new(0, 10)
+    paddingCrypto.PaddingLeft = UDim.new(0, 10)
+    paddingCrypto.PaddingRight = UDim.new(0, 10)
+
+    for i, name in ipairs(Config.machineNames) do
+        local item = Instance.new("Frame", buyScrollCrypto)
+        item.Size = UDim2.new(1, -20, 0, 40)
+        item.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+        item.BorderSizePixel = 0
+
+        local itemCorner = Instance.new("UICorner", item)
+        itemCorner.CornerRadius = UDim.new(0, 4)
+
+        -- Machine name with icon
+        local lbl = Instance.new("TextLabel", item)
+        lbl.Size = UDim2.new(0.65, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 10, 0, 0)
+        lbl.Text = "⚡ " .. name
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.fromRGB(220, 221, 222)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 12
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+        -- Modern toggle button
+        local chk = Instance.new("TextButton", item)
+        chk.Size = UDim2.new(0, 80, 0, 25)
+        chk.Position = UDim2.new(1, -90, 0.5, -12.5)
+        chk.Font = Enum.Font.GothamSemibold
+        chk.TextSize = 11
+        chk.BorderSizePixel = 0
+        chk.AutoButtonColor = false
+
+        local chkCorner = Instance.new("UICorner", chk)
+        chkCorner.CornerRadius = UDim.new(0, 12)
+
+        local function updateBuyText() 
+            if Config.autoBuy[name] then
+                chk.Text = "✓ ON"
+                chk.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+                chk.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                chk.Text = "OFF"
+                chk.BackgroundColor3 = Color3.fromRGB(114, 118, 125)
+                chk.TextColor3 = Color3.fromRGB(185, 187, 190)
+            end
+        end
+        updateBuyText()
+
+        -- Hover effects
+        chk.MouseEnter:Connect(function()
+            if Config.autoBuy[name] then
+                chk.BackgroundColor3 = Color3.fromRGB(85, 195, 143)
+            else
+                chk.BackgroundColor3 = Color3.fromRGB(130, 134, 141)
+            end
+        end)
+        chk.MouseLeave:Connect(function()
+            updateBuyText()
+        end)
+
+        chk.MouseButton1Click:Connect(function()
+            Config.autoBuy[name] = not Config.autoBuy[name]
+            updateBuyText()
+        end)
+
+        buyScrollCrypto.CanvasSize = UDim2.new(0, 0, 0, buyLayoutCrypto.AbsoluteContentSize.Y + 20)
     end
-end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        mainFrame.Position = UDim2.new(
-            startPos.X.Scale, 
-            startPos.X.Offset + delta.X, 
-            startPos.Y.Scale, 
-            startPos.Y.Offset + delta.Y
-        )
+    -- Header for Auto Buy Gear
+    local headerGear = Instance.new("TextLabel", frame)
+    headerGear.Size = UDim2.new(1, -20, 0, 30)
+    headerGear.Position = UDim2.new(0, 10, 0.5, 10)
+    headerGear.BackgroundTransparency = 1
+    headerGear.Text = "🛠️ Auto Purchase Gear"
+    headerGear.TextColor3 = Color3.fromRGB(255, 255, 255)
+    headerGear.Font = Enum.Font.GothamBold
+    headerGear.TextSize = 16
+    headerGear.TextXAlignment = Enum.TextXAlignment.Left
+
+    local buyScrollGear = Instance.new("ScrollingFrame", frame)
+    buyScrollGear.Size = UDim2.new(1, -20, 0.4, -60)
+    buyScrollGear.Position = UDim2.new(0, 10, 0.55, 50)
+    buyScrollGear.CanvasSize = UDim2.new(0, 0, 0, 0)
+    buyScrollGear.ScrollBarThickness = 4
+    buyScrollGear.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
+    buyScrollGear.BorderSizePixel = 0
+    buyScrollGear.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+
+    local scrollCornerGear = Instance.new("UICorner", buyScrollGear)
+    scrollCornerGear.CornerRadius = UDim.new(0, 4)
+
+    local buyLayoutGear = Instance.new("UIListLayout", buyScrollGear)
+    buyLayoutGear.SortOrder = Enum.SortOrder.LayoutOrder
+    buyLayoutGear.Padding = UDim.new(0, 8)
+
+    -- Add padding
+    local paddingGear = Instance.new("UIPadding", buyScrollGear)
+    paddingGear.PaddingTop = UDim.new(0, 10)
+    paddingGear.PaddingBottom = UDim.new(0, 10)
+    paddingGear.PaddingLeft = UDim.new(0, 10)
+    paddingGear.PaddingRight = UDim.new(0, 10)
+
+    local gearItems = {
+        "BasicLuckFlag",
+        "BasicSpeedFlag",
+        "BasicCryptoFlag",
+        "AdvancedLuckFlag",
+        "SuperSpeaker"
+    }
+
+    for _, gear in ipairs(gearItems) do
+        local item = Instance.new("Frame", buyScrollGear)
+        item.Size = UDim2.new(1, -20, 0, 40)
+        item.BackgroundColor3 = Color3.fromRGB(64, 68, 75)
+        item.BorderSizePixel = 0
+
+        local itemCorner = Instance.new("UICorner", item)
+        itemCorner.CornerRadius = UDim.new(0, 4)
+
+        -- Gear name with icon
+        local lbl = Instance.new("TextLabel", item)
+        lbl.Size = UDim2.new(0.65, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 10, 0, 0)
+        lbl.Text = "🔧 " .. gear
+        lbl.BackgroundTransparency = 1
+        lbl.TextColor3 = Color3.fromRGB(220, 221, 222)
+        lbl.Font = Enum.Font.Gotham
+        lbl.TextSize = 12
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+        -- Modern toggle button
+        local chk = Instance.new("TextButton", item)
+        chk.Size = UDim2.new(0, 80, 0, 25)
+        chk.Position = UDim2.new(1, -90, 0.5, -12.5)
+        chk.Font = Enum.Font.GothamSemibold
+        chk.TextSize = 11
+        chk.BorderSizePixel = 0
+        chk.AutoButtonColor = false
+
+        local chkCorner = Instance.new("UICorner", chk)
+        chkCorner.CornerRadius = UDim.new(0, 12)
+
+        local function updateGearText() 
+            if Config.autoBuy[gear] then
+                chk.Text = "✓ ON"
+                chk.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+                chk.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                chk.Text = "OFF"
+                chk.BackgroundColor3 = Color3.fromRGB(114, 118, 125)
+                chk.TextColor3 = Color3.fromRGB(185, 187, 190)
+            end
+        end
+        updateGearText()
+
+        -- Hover effects
+        chk.MouseEnter:Connect(function()
+            if Config.autoBuy[gear] then
+                chk.BackgroundColor3 = Color3.fromRGB(85, 195, 143)
+            else
+                chk.BackgroundColor3 = Color3.fromRGB(130, 134, 141)
+            end
+        end)
+        chk.MouseLeave:Connect(function()
+            updateGearText()
+        end)
+
+        chk.MouseButton1Click:Connect(function()
+            Config.autoBuy[gear] = not Config.autoBuy[gear]
+            updateGearText()
+        end)
+
+        buyScrollGear.CanvasSize = UDim2.new(0, 0, 0, buyLayoutGear.AbsoluteContentSize.Y + 20)
     end
-end)
+end
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
+-- ========================
+-- SETTINGS TAB MODULE
+-- ========================
+local SettingsTab = {}
+
+function SettingsTab.init(frame)
+    -- Header
+    local header = Instance.new("TextLabel", frame)
+    header.Size = UDim2.new(1, -20, 0, 30)
+    header.Position = UDim2.new(0, 10, 0, 10)
+    header.BackgroundTransparency = 1
+    header.Text = "⚙️ Settings & Configuration"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 16
+    header.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Settings container
+    local container = Instance.new("Frame", frame)
+    container.Size = UDim2.new(1, -20, 0, 280)
+    container.Position = UDim2.new(0, 10, 0, 60)
+    container.BackgroundColor3 = Color3.fromRGB(40, 43, 48)
+    container.BorderSizePixel = 0
+    local containerCorner = Instance.new("UICorner", container)
+    containerCorner.CornerRadius = UDim.new(0, 6)
+
+    -- Save Configuration button
+    local saveBtn = Instance.new("TextButton", container)
+    saveBtn.Size = UDim2.new(1, -20, 0, 50)
+    saveBtn.Position = UDim2.new(0, 10, 0, 15)
+    saveBtn.Font = Enum.Font.GothamBold
+    saveBtn.TextSize = 14
+    saveBtn.BorderSizePixel = 0
+    saveBtn.AutoButtonColor = false
+
+    local saveCorner = Instance.new("UICorner", saveBtn)
+    saveCorner.CornerRadius = UDim.new(0, 6)
+
+    -- Status indicator
+    local statusLabel = Instance.new("TextLabel", container)
+    statusLabel.Size = UDim2.new(1, -20, 0, 20)
+    statusLabel.Position = UDim2.new(0, 10, 0, 80)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.TextSize = 11
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+    if Config.canFile then
+        saveBtn.Text = "💾 Save Configuration"
+        saveBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        statusLabel.Text = "✅ File system access available"
+        statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
+        
+        -- Hover effect
+        saveBtn.MouseEnter:Connect(function()
+            saveBtn.BackgroundColor3 = Color3.fromRGB(104, 117, 255)
+        end)
+        saveBtn.MouseLeave:Connect(function()
+            saveBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        end)
+        
+        saveBtn.MouseButton1Click:Connect(function()
+            Config.save()
+            saveBtn.Text = "✅ Configuration Saved!"
+            saveBtn.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            task.wait(2)
+            saveBtn.Text = "💾 Save Configuration"
+            saveBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        end)
+    else
+        saveBtn.Text = "🚫 File System Unavailable"
+        saveBtn.BackgroundColor3 = Color3.fromRGB(114, 118, 125)
+        saveBtn.TextColor3 = Color3.fromRGB(185, 187, 190)
+        statusLabel.Text = "❌ Executor doesn't support file operations"
+        statusLabel.TextColor3 = Color3.fromRGB(240, 71, 71)
     end
-end)
+    
+end
 
--- Entrance animation
-mainFrame.Size = UDim2.new(0, 0, 0, 0)
-mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+-- ========================
+-- REMOTE SPY MODULE
+-- ========================
+local RemoteSpy = {}
 
-local entranceTween = TweenService:Create(mainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.new(0, 420, 0, 320),
-    Position = UDim2.new(0.5, -210, 0.5, -160)
-})
-entranceTween:Play()
+function RemoteSpy.init()
+    -- Spy ClaimCrypto to collect UUIDs
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldNC = mt.__namecall
+    
+    mt.__namecall = newcclosure(function(self, ...)
+        if getnamecallmethod() == "FireServer" and tostring(self):find("ClaimCrypto") then
+            local u = (...)
+            if typeof(u) == "string" and u:match("{[%w%-]+}") then 
+                CollectTab.addUUID(u) 
+            end
+        end
+        return oldNC(self, ...)
+    end)
+end
 
--- Welcome message
-wait(0.5)
-updateStatus("Welcome! Get your key or enter an existing one below.", Color3.fromRGB(70, 180, 70))
+-- ========================
+-- AUTOMATION LOOPS MODULE
+-- ========================
+local AutomationLoops = {}
+
+function AutomationLoops.start()
+    -- Auto-collect and auto-sell loop
+    spawn(function()
+        while UIManager.gui and UIManager.gui.Parent do
+            -- Auto collect
+            for u, ok in pairs(Config.autoCollect) do 
+                if ok then 
+                    pcall(function() 
+                        remotes.ClaimCrypto:FireServer(u) 
+                    end) 
+                end 
+            end
+            
+            -- Auto sell
+            if Config.autoSell then 
+                pcall(function() 
+                    remotes.SellCrypto:FireServer("All") 
+                end) 
+            end
+            
+            task.wait(1)
+        end
+    end)
+    
+    -- Auto-buy loop
+    spawn(function()
+        local interval = 0.5
+        while UIManager.gui and UIManager.gui.Parent do
+            for i, name in ipairs(Config.machineNames) do 
+                if Config.autoBuy[name] then 
+                    pcall(function() 
+                        remotes.PurchaseMachine:FireServer("Machine_" .. i) 
+                    end) 
+                end 
+            end
+            task.wait(interval)
+        end
+    end)
+
+    -- Auto-buy gear loop
+    spawn(function()
+        local interval = 0.5
+        while UIManager.gui and UIManager.gui.Parent do
+            -- Auto-buy gear loop
+            local gearItems = {
+                "BasicLuckFlag",
+                "BasicSpeedFlag",
+                "BasicCryptoFlag",
+                "AdvancedLuckFlag",
+                "SuperSpeaker"
+            }
+
+            for _, gear in ipairs(gearItems) do
+                if Config.autoBuy[gear] then
+                    pcall(function()
+                        remotes.PurchaseGear:FireServer(gear)
+                    end)
+                end
+            end
+
+            task.wait(interval)
+        end
+    end)
+end
+
+-- ========================
+-- MAIN APPLICATION
+-- ========================
+local function main()
+    -- Initialize UI
+    UIManager.init()
+    
+    -- Initialize tabs
+    CollectTab.init(UIManager.frames.Collect)
+    SellTab.init(UIManager.frames.Sell)
+    BuyTab.init(UIManager.frames.Buy)
+    SettingsTab.init(UIManager.frames.Settings)
+    
+    -- Set up automation
+    RemoteSpy.init()
+    AutomationLoops.start()
+end
+
+-- Start the application
+main()
